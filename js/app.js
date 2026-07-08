@@ -159,12 +159,13 @@ SCREENS.inspectors = () => {
   const pending = DB.inspectors.filter(i => i.status === "pending").length;
   return screen({
     title: "Examiners", sub: "Registrations & approvals",
-    actions: `<div class="hicon" onclick="toast('Examiners register from the app','userPlus')">${icon("userPlus", 20)}</div>`,
+    actions: `<div class="hicon" onclick="registerExaminer()">${icon("userPlus", 20)}</div>`,
     body: `
       <div class="stat-grid">
         ${statCard("users", "tint-indigo", DB.inspectors.length, "Total")}
         ${statCard("clock", "tint-orange", pending, "Pending Approval")}
       </div>
+      <button class="btn btn-primary mt12" onclick="registerExaminer()">${icon("userPlus", 18)} Register examiner</button>
       <div class="section-title"><h3>All registrations</h3></div>
       <div class="list">${DB.inspectors.map((i, idx) => `
         <div class="list-item" onclick="openInspector(${idx})">
@@ -183,6 +184,7 @@ function openInspector(idx) {
       ${infoRow("phone", "Mobile", i.mobile)}
       ${infoRow("mail", "Email", `${i.email} ${i.verified ? "✓" : ""}`)}
       ${infoRow("shield", "SCE Membership", i.sce)}
+      ${infoRow("doc", "Certificate", i.cert ? "Attached ✓" : "membership-certificate.pdf")}
       ${infoRow("doc", "Reports", i.reports)}
       ${infoRow("clock", "Joined", i.joined)}</div>
     <div class="card mt12" style="background:var(--surface-2);border:none">
@@ -194,6 +196,43 @@ function openInspector(idx) {
       : `<button class="btn btn-ghost mt16" onclick="toast('Email sent to ${i.name.split(" ")[0]}','mail')">${icon("mail", 18)} Message examiner</button>`}`);
 }
 function setInspector(idx, st) { DB.inspectors[idx].status = st; closeAll(); render("inspectors", {}, "enter"); toast(`${DB.inspectors[idx].name} ${st} · both parties emailed`, st === "approved" ? "check" : "x"); }
+function registerExaminer() {
+  openSheet(`<h3 style="font-weight:800;font-size:17px">Examiner registration</h3>
+    <p class="small muted mt8" style="margin-bottom:14px">All fields are mandatory.</p>
+    <div class="field"><label>Full name</label><input id="rxName" placeholder="e.g. Salem Al-Harbi"></div>
+    <div style="display:flex;gap:10px">
+      <div class="field" style="flex:1"><label>City</label><select id="rxCity"><option>Riyadh</option><option>Jeddah</option><option>Dammam</option><option>Mecca</option></select></div>
+      <div class="field" style="flex:1"><label>Nationality</label><select id="rxNat"><option>Saudi</option><option>Egyptian</option><option>Jordanian</option></select></div>
+    </div>
+    <div class="field"><label>Mobile number</label><input id="rxMobile" placeholder="+966 5X XXX XXXX"></div>
+    <div class="field"><label>Email</label><input id="rxEmail" placeholder="name@example.com"></div>
+    <div class="field"><label>Email verification code</label>
+      <div style="display:flex;gap:8px">
+        <input id="rxCode" placeholder="6-digit code" style="flex:1">
+        <button class="btn btn-soft" style="width:auto;padding:0 14px;flex:none" onclick="sendExaminerCode(event)">Send code</button>
+      </div>
+    </div>
+    <div class="field"><label>SCE membership number</label><input id="rxSce" placeholder="SCE-XXXXXX"></div>
+    <div class="field"><label>Engineering membership certificate</label>
+      <div onclick="attachCert(event)" style="display:flex;align-items:center;gap:8px;padding:11px 12px;border:1px dashed var(--border);border-radius:12px;cursor:pointer;color:var(--text-2)">${icon("doc", 16)}<span id="rxCertName" class="small">Attach certificate (PDF / JPG)</span></div>
+    </div>
+    <button class="btn btn-primary mt8" onclick="submitExaminer()">${icon("check", 18)} Submit registration</button>`);
+}
+function sendExaminerCode(e) { e.preventDefault(); toast("Verification code sent to email", "mail"); }
+function attachCert(e) { e.preventDefault(); const el = document.getElementById("rxCertName"); if (el) el.textContent = "membership-certificate.pdf ✓"; toast("Certificate attached", "check"); }
+function submitExaminer() {
+  const val = id => (document.getElementById(id) || {}).value || "";
+  const name = val("rxName").trim() || "New Examiner";
+  const initials = name.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "NE";
+  DB.inspectors.unshift({
+    id: "e" + (DB.inspectors.length + 1), name, city: val("rxCity") || "Riyadh", nationality: val("rxNat") || "Saudi",
+    mobile: val("rxMobile").trim() || "+966 5X XXX XXXX", email: val("rxEmail").trim() || "new@inspectpro.sa",
+    verified: !!val("rxCode").trim(), sce: val("rxSce").trim() || "—", status: "pending", reports: 0,
+    joined: "2026-07-08", av: "av-2", initials, cert: true,
+  });
+  DB.kpi.pending = DB.inspectors.filter(i => i.status === "pending").length + DB.requests.filter(r => r.status === "reopened").length;
+  closeAll(); render("inspectors", {}, "enter"); toast(`${name} registered · both parties emailed`, "mail");
+}
 
 /* ---------- Analysis ---------- */
 SCREENS.analysis = () => {
@@ -343,7 +382,11 @@ const AR = {
   "All registrations": "جميع التسجيلات", "Anti-forgery lock": "قفل مكافحة التزوير",
   "Personal data can't be modified after acceptance without admin approval.": "لا يمكن تعديل البيانات الشخصية بعد القبول دون موافقة الإدارة.",
   "Reject": "رفض", "Approve": "اعتماد", "Message examiner": "مراسلة الفاحص", "Email": "البريد",
-  "SCE Membership": "عضوية هيئة المهندسين", "Reports": "التقارير", "Joined": "تاريخ الانضمام",
+  "SCE Membership": "عضوية هيئة المهندسين", "Reports": "التقارير", "Joined": "تاريخ الانضمام", "Certificate": "الشهادة",
+  "Register examiner": "تسجيل فاحص", "Examiner registration": "تسجيل فاحص", "All fields are mandatory.": "جميع الحقول إلزامية.",
+  "Full name": "الاسم الكامل", "Nationality": "الجنسية", "Mobile number": "رقم الجوال", "Email verification code": "رمز تحقق البريد",
+  "Send code": "إرسال الرمز", "SCE membership number": "رقم عضوية هيئة المهندسين", "Engineering membership certificate": "شهادة العضوية الهندسية",
+  "Attach certificate (PDF / JPG)": "إرفاق الشهادة (PDF / JPG)", "Submit registration": "إرسال التسجيل",
   // Analysis
   "Data Analysis": "تحليل البيانات", "Filter & explore": "التصفية والاستكشاف",
   "Date · Examiner · Request No · Mobile · Status": "التاريخ · الفاحص · رقم الطلب · الجوال · الحالة",
